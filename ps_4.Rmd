@@ -1,0 +1,205 @@
+---
+title: 'Problem Set #4'
+author: "Seeam S. Noor"
+date: "Due February 27, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+# Loading all packages necessary to complete this assignment
+library(gt)
+library(tidyverse)
+library(lubridate)
+library(forcats)
+library(readr)
+
+# Creating the data frame from the csv file in project directory
+orig <- read_csv(
+  file = "ps_4_elections-poll-nc09-3.csv",
+  # Making sure each column is read as the right data type
+  col_types = cols(
+    .default = col_character(),
+    turnout_scale = col_double(),
+    turnout_score = col_double(),
+    w_LV = col_double(),
+    w_RV = col_double(),
+    final_weight = col_double(),
+    timestamp = col_datetime(format = "")))
+```
+
+
+```{r question1, echo=FALSE, message=FALSE, warning=FALSE}
+  # Filtering tibble for only Democrat voters and counting them
+  Q1a <- orig %>% filter(response == 'Dem') %>% nrow()
+  
+  # Creating a new dataframe that will help answer the 2nd question
+  Q1b_table <- 
+    orig %>% 
+    # Filtering Undecided and Republicans and then grouping by that and counting them
+    filter(response %in% c('Rep','Und')) %>% 
+    group_by(response) %>% 
+    count()
+  
+  # Extracting the number in each category and calculating the difference
+  Q1b <- Q1b_table$n[1] - Q1b_table$n[2]
+  
+  Q1c <- 
+    orig %>% 
+    # Choosing the columns we need
+    select(gender, gender_combined) %>%
+    # Creating a new column that gives 1 if our selected columns, 0 otherwise
+    mutate(compare = if_else(gender == gender_combined, 1, 0)) %>%
+    # Filtering the number of 0s and counting the number of rows we get
+    filter(compare == 0) %>%
+    nrow()
+  
+  Q1d <- 
+    orig %>% 
+    # Choosing the columns we need
+    select(race_eth, file_race_black) %>%
+    # Filtering for only the rows we need
+    filter(race_eth == 'White') %>%
+    # Creating a new column that gives 1 if our selected columns, 0 otherwise
+    mutate(compare = if_else(race_eth == file_race_black, 1, 0)) %>%
+    # Filtering the number of 0s and counting the number of rows we get
+    filter(compare == 0) %>%
+    nrow()
+  
+  Q1e_data <-
+    orig %>%
+    # Filtering for only Democrats and Republicans
+    filter(response %in% c('Dem','Rep')) %>%
+    # Choosing the columns we need
+    select(response, timestamp) %>%
+    # Grouping by Democrats and REpublicans
+    group_by(response) %>%
+    # Taking the timestamp which happened earliest in both groups
+    summarize(fastest = min(timestamp))
+  
+  # Taking the difference in minutes between the two stamps
+  Q1e <- minute(Q1e_data$fastest[2]) - minute(Q1e_data$fastest[1])
+  
+
+  # Answers to all questions have been saved as separate variables so they can be easily included in the text below
+```
+
+## Question 1
+  
+There were `r Q1a` respondents who supported the Democratic candidate.  
+There were `r Q1b` more respondents who favored the Republican candidate than who were Undecided.  
+There are two gender variables (gender and gender_combined). There are `r Q1c` individuals for whom these variables have different values.  
+There are `r Q1d` respondents listed as “White” under race_eth who are not listed as “White” under file_race_black.  
+The first response of Dem came `r Q1e` minutes (rounded to the nearest minute) before the first response of Rep.
+
+##Question 2  
+  
+
+```{r question2, echo=FALSE, message=FALSE, warning=FALSE}
+  # Creating a new dataframe for our plot
+  Q2_data <- 
+     orig %>% 
+      # Choosing the columns we need
+      select(response, race_eth, final_weight) %>%
+      # Removing people who didn't respond
+      filter(race_eth != "[DO NOT READ] Don't know/Refused") %>%
+      # Making sure our categories are in right order
+      mutate(race_eth = fct_relevel(race_eth, c("White", "Black", "Hispanic", "Asian","Other"))) %>%
+      # Grouping by response and race
+      group_by(response, race_eth) %>%
+      # Considering the fact that some respondents are weighted more since they respond less
+      summarize(total = sum(final_weight)) %>%
+      # splitting the data on response as key 
+      spread(key =  response, value = total)
+     
+  # Turning all NAs into 0
+  Q2_data[is.na(Q2_data)] <- 0   
+     
+  Q2_data %>%
+    # Creating a column that is sum of Rep, Dem and Und
+    mutate(all = Dem + Rep + Und + 3) %>%
+    # Making sure the columns are proportions of total
+    mutate(Dem = Dem / all) %>%
+    mutate(Rep = Rep / all) %>%
+    mutate(Und = Und / all) %>%
+    # Choosing the columns we need
+    select('race_eth','Dem','Rep','Und') %>%
+    # Renaming the race_eth column to something easier to understand
+    rename(Race = race_eth) %>%
+    # Using gt to create a better looking table
+    gt() %>%
+    # Adding a header to the table
+    tab_header(
+      title = "Polling Results in North Carolina 9th Congressional District by Race") %>%
+    # Fixing the labels for the table
+    cols_label(
+      Dem = "DEM.",
+      Rep = "REP.",
+      Und = "UND."
+    ) %>%
+    # Turning the numbers into rounded percentages
+    fmt_percent(columns = vars(Dem, Rep, Und),
+                 decimals = 0) %>%
+    # Turning the 0s into NAs
+    na_if(0) %>%
+    # Reformatting the NAs into dashes
+    fmt_missing(columns = vars(Und), rows = 4)
+```
+
+##Question 3  
+
+
+```{r question3, echo=FALSE, message=FALSE, warning=FALSE}
+  orig %>%
+    # Filtering people who didn't want to respond
+    filter(educ != '[DO NOT READ] Refused') %>%
+    # Choosing the columns we need
+    select(educ, final_weight) %>%
+    group_by(educ) %>%
+    # Plotting our data and arranging the educational levels by weight given
+    ggplot(aes(x = fct_reorder(educ,desc(final_weight)), y = final_weight)) +
+    # Creating a violin plot
+    geom_violin() +
+    # Flipping the plot to make it a horizontal violin plot
+    coord_flip() +
+    # Plotting the individual points in tnside each violin
+    geom_jitter(height = 0, width = 0.1) + 
+    # Removing the x-axis label(y-axis practically since we flipped the plot)
+    xlab(NULL) + 
+    # Providing appropriate y-axis title
+    ylab("Weight Given to Respondents in Calculating Poll Results") +
+    # Adding title, subtitle and caption to the plot
+    labs(title = "More Educated Matter Less in North Carolina 9th", subtitle = "Poll gives more weight to people who are less likely to participate in polls", caption = "New York Times Upshot/Sienna College 2018 live polls")
+```
+
+##Question 4  
+
+
+
+```{r question4, echo=FALSE, message=FALSE, warning=FALSE}
+  orig %>% 
+    # Choosing the columns we need
+    select(ager, gender, response) %>%
+    # Filtering for responds we don't need
+    filter(ager != "[DO NOT READ] Refused" & response != '3' & response != 'Und') %>%
+    # Grouping data by response, age and gender
+    group_by(response, ager, gender) %>% 
+    # Choosing aesthetics where gender as fill
+    ggplot(aes(x = ager, fill = gender)) +
+    # Creating a bar graph
+    geom_bar() +
+    # Creating two seperate graphs, Rep and Dem, to see genderwise response in each age category
+    facet_wrap(~response) + 
+    # Flipping the axes to get horizontal bars
+    coord_flip() + 
+    # Removing the x-axis title(y-axis practically since we flipped the plot)
+    xlab(NULL) + 
+    # Providing appropriate y-axis title
+    ylab("Number of respondents in each category") +
+    labs(title = "Party preferences by gender and age", subtitle = "Females have more Democrats in most age categories \nMales have more Republicans in each age category", caption = "New York Times Upshot/Sienna College 2018 live polls")
+```
+
+
+
+##Colleagues
+  
+Christopher Onesti
