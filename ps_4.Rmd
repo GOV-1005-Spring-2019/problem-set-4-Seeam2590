@@ -150,19 +150,22 @@ The first response of Dem came `r Q1e` minutes (rounded to the nearest minute) b
 
 ```{r question3, echo=FALSE, message=FALSE, warning=FALSE}
   orig %>%
-    # Filtering people who didn't want to respond
-    filter(educ != '[DO NOT READ] Refused') %>%
     # Choosing the columns we need
     select(educ, final_weight) %>%
+    # Filtering people who didn't want to respond
+    filter(educ != '[DO NOT READ] Refused') %>%
+    # Making sure our educational levels are in correct order
+    mutate(educ = fct_relevel(educ, c("Grade school","High school","Some college or trade school","Bachelors' degree","Graduate or Professional Degree"))) %>%
+    # Grouping be education level
     group_by(educ) %>%
-    # Plotting our data and arranging the educational levels by weight given
-    ggplot(aes(x = fct_reorder(educ,desc(final_weight)), y = final_weight)) +
+    # Plotting our data
+    ggplot(aes(x = educ, y = final_weight)) +
     # Creating a violin plot
     geom_violin() +
     # Flipping the plot to make it a horizontal violin plot
     coord_flip() +
     # Plotting the individual points in tnside each violin
-    geom_jitter(height = 0, width = 0.1) + 
+    geom_jitter(width = 0.2, alpha = 0.4) + 
     # Removing the x-axis label(y-axis practically since we flipped the plot)
     xlab(NULL) + 
     # Providing appropriate y-axis title
